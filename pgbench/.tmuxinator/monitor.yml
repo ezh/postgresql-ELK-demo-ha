@@ -1,0 +1,15 @@
+# ~/.tmuxinator/monitor.yml
+
+name: monitor
+root: ~/
+
+# Controls whether the tmux session should be attached to automatically. Defaults to true.
+attach: false
+
+windows:
+  - keeper:
+      layout: even-vertical
+      panes:
+        - /root/monitor.sh keeper-00
+        - /root/monitor.sh keeper-01
+        - /root/monitor.sh keeper-02

@@ -1,0 +1,16 @@
+FROM logstash:5.4.3
+
+ARG pubkey
+ARG privkey
+
+COPY $pubkey /root/.ssh/authorized_keys
+COPY $privkey /root/.ssh/
+RUN chmod 400 /root/.ssh/*
+
+COPY bin/logstash-entrypoint.sh /usr/local/bin/
+RUN chmod 777 /usr/local/bin/logstash-entrypoint.sh
+
+RUN apt-get update && apt-get install -y bash curl gawk locales-all netcat-openbsd rsync ssh sudo && \
+    chsh -s /bin/bash && mkdir /var/run/sshd && chmod 0755 /var/run/sshd
+
+ENTRYPOINT ["/usr/local/bin/logstash-entrypoint.sh"]

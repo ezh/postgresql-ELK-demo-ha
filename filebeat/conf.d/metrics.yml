@@ -1,0 +1,13 @@
+filebeat.prospectors:
+    -
+      document_type: pgsql-logs
+      harvester_limit: 10
+      ignore_older: 30m
+      input_type: log
+      fields_under_root: true
+      json.keys_under_root: true
+      json.message_key: log
+      json.add_error_key: true
+      paths:
+        - /etc/filebeat/data/beat-*.json
+      scan_frequency: 5s

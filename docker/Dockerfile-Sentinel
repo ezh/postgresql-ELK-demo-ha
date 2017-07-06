@@ -1,0 +1,23 @@
+FROM sorintlab/stolon:v0.6.0-pg9.6
+
+ARG pubkey
+ARG privkey
+
+COPY $pubkey /root/.ssh/authorized_keys
+COPY $privkey /root/.ssh/
+RUN chmod 400 /root/.ssh/*
+
+ENV STSENTINEL_CLUSTER_NAME=stolon-cluster \
+    STSENTINEL_STORE_BACKEND=etcd \
+    STSENTINEL_STORE_ENDPOINTS=http://localhost:2379 \
+    STSENTINEL_INITIAL_CLUSTER_SPEC=/etc/stolon/init-spec.json
+
+COPY init-spec.json ${STSENTINEL_INITIAL_CLUSTER_SPEC}
+
+COPY bin/sentinel-entrypoint.sh /usr/local/bin/
+RUN chmod 777 /usr/local/bin/sentinel-entrypoint.sh
+
+RUN apt-get update && apt-get install -y bash curl gawk locales-all netcat-openbsd rsync ssh sudo && \
+    chsh -s /bin/bash && mkdir /var/run/sshd && chmod 0755 /var/run/sshd
+
+ENTRYPOINT ["/usr/local/bin/sentinel-entrypoint.sh"]

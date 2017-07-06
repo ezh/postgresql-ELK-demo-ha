@@ -1,0 +1,19 @@
+FROM sorintlab/stolon:v0.6.0-pg9.6
+
+ARG pubkey
+ARG privkey
+
+COPY $pubkey /root/.ssh/authorized_keys
+COPY $privkey /root/.ssh/
+RUN chmod 400 /root/.ssh/*
+
+COPY bin/pgbench-entrypoint.sh /usr/local/bin/
+RUN chmod 777 /usr/local/bin/pgbench-entrypoint.sh
+COPY bin/run-bench.sh /usr/local/bin/
+RUN chmod 777 /usr/local/bin/run-bench.sh
+
+RUN apt-get update && apt-get install -y bash curl gawk locales-all netcat-openbsd rsync ruby ssh sudo tmux && \
+    chsh -s /bin/bash && mkdir /var/run/sshd && chmod 0755 /var/run/sshd && \
+    gem install tmuxinator
+
+ENTRYPOINT ["/usr/local/bin/pgbench-entrypoint.sh"]

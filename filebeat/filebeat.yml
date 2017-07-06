@@ -1,0 +1,17 @@
+path.config: /etc/filebeat
+path.data: /etc/filebeat/data
+path.logs: /etc/filebeat/data
+filebeat.config_dir: /etc/filebeat/conf.d
+output:
+  logstash:
+    hosts:
+      - logstash:5044
+    timeout: 60
+    max_retries: -1
+logging:
+  level: info
+
+filebeat.config.prospectors:
+  path: /etc/filebeat/conf.d/*.yml
+  reload.enabled: true
+  reload.period: 10s

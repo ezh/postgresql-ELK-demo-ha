@@ -1,0 +1,16 @@
+FROM quay.io/coreos/etcd:v3.1.9
+
+ARG pubkey
+ARG privkey
+
+COPY $pubkey /root/.ssh/authorized_keys
+COPY $privkey /root/.ssh/
+RUN chmod 400 /root/.ssh/*
+
+COPY bin/etcd-entrypoint.sh /usr/local/bin/
+RUN chmod 777 /usr/local/bin/etcd-entrypoint.sh
+
+RUN apk add --no-cache bash curl openssh rsync shadow  && ssh-keygen -A && \
+    chsh -s /bin/bash && mkdir /var/run/sshd && chmod 0755 /var/run/sshd
+
+ENTRYPOINT ["/usr/local/bin/etcd-entrypoint.sh"]

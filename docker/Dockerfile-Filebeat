@@ -1,0 +1,16 @@
+FROM prima/filebeat:5.3.0
+
+ARG pubkey
+ARG privkey
+
+COPY $pubkey /root/.ssh/authorized_keys
+COPY $privkey /root/.ssh/
+RUN chmod 400 /root/.ssh/*
+
+COPY bin/filebeat-entrypoint.sh /usr/local/bin/
+RUN chmod 777 /usr/local/bin/filebeat-entrypoint.sh
+
+RUN apt-get update && apt-get install -y bash curl gawk locales-all netcat-openbsd rsync ssh sudo && \
+    chsh -s /bin/bash && mkdir /var/run/sshd && chmod 0755 /var/run/sshd
+
+ENTRYPOINT ["/usr/local/bin/filebeat-entrypoint.sh"]

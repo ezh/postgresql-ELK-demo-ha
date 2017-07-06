@@ -1,0 +1,242 @@
+version: '2.1'
+services:
+  filebeat:
+    build:
+      args:
+        pubkey: $PUBKEY
+        privkey: $PRIVKEY
+      context: docker
+      dockerfile: Dockerfile-Filebeat
+    command: -path.config /etc/filebeat -strict.perms=false
+    container_name: filebeat
+    depends_on:
+      - logstash
+    hostname: filebeat
+    image: filebeat:demo
+    networks:
+      - stolon-network
+    restart: "unless-stopped"
+    # fix error, cannot retrieve cgroups information {:exception=>"Errno::ENOENT", :message=>"No such file or directory - /sys/fs/cgroup/cpuacct/docker/....
+    volumes:
+      - ./filebeat:/etc/filebeat:rw
+
+  logstash:
+    build:
+      args:
+        pubkey: $PUBKEY
+        privkey: $PRIVKEY
+      context: docker
+      dockerfile: Dockerfile-Logstash
+    command: --path.settings /etc/logstash
+    container_name: logstash
+    depends_on:
+      - elasticsearch
+    hostname: logstash
+    image: logstash:demo
+    networks:
+      - stolon-network
+    restart: "unless-stopped"
+    # fix error, cannot retrieve cgroups information {:exception=>"Errno::ENOENT", :message=>"No such file or directory - /sys/fs/cgroup/cpuacct/docker/....
+    volumes:
+      - ./logstash:/etc/logstash:rw
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+
+  elasticsearch:
+    build:
+      args:
+        pubkey: $PUBKEY
+        privkey: $PRIVKEY
+      context: docker
+      dockerfile: Dockerfile-ElasticSearch
+    command: elasticsearch
+    container_name: elasticsearch
+    depends_on:
+      - pgbench
+    expose:
+      - "9200"
+    hostname: elasticsearch
+    image: elasticsearch:demo
+    networks:
+      - stolon-network
+    restart: unless-stopped
+    volumes:
+      - ./elasticsearch:/usr/share/elasticsearch/data
+
+  kibana:
+    build:
+      args:
+        pubkey: $PUBKEY
+        privkey: $PRIVKEY
+      context: docker
+      dockerfile: Dockerfile-Kibana
+    container_name: kibana
+    depends_on:
+      - elasticsearch
+    expose:
+      - "5601"
+    hostname: kibana
+    image: kibana:demo
+    networks:
+      - stolon-network
+    restart: unless-stopped
+
+  pgbench:
+    build:
+      args:
+        pubkey: $PUBKEY
+        privkey: $PRIVKEY
+      context: docker
+      dockerfile: Dockerfile-PgBench
+    container_name: pgbench
+    depends_on:
+      - proxy
+    hostname: pgbench
+    image: stolon-pgbench:demo
+    environment:
+      - AUTHORIZED_KEY=$AUTHORIZED_KEY
+    networks:
+      - stolon-network
+    ports:
+      - 0.0.0.0:2222:22
+    restart: "unless-stopped"
+
+  sentinel:
+    build:
+      args:
+        pubkey: $PUBKEY
+        privkey: $PRIVKEY
+      context: docker
+      dockerfile: Dockerfile-Sentinel
+    container_name: sentinel
+    depends_on:
+      - etcd-00
+      - etcd-01
+      - etcd-02
+    hostname: sentinel
+    image: stolon-sentinel:demo
+    environment:
+      - AUTHORIZED_KEY=$AUTHORIZED_KEY
+      - STSENTINEL_STORE_ENDPOINTS=http://etcd-00:2379,http://etcd-01:2379,http://etcd-02:2379
+    networks:
+      - stolon-network
+    restart: "unless-stopped"
+
+  proxy:
+    build:
+      args:
+        pubkey: $PUBKEY
+        privkey: $PRIVKEY
+      context: docker
+      dockerfile: Dockerfile-Proxy
+    container_name: proxy
+    depends_on:
+      - etcd-00
+      - etcd-01
+      - etcd-02
+    environment:
+      - AUTHORIZED_KEY=$AUTHORIZED_KEY
+      - STPROXY_STORE_ENDPOINTS=http://etcd-00:2379,http://etcd-01:2379,http://etcd-02:2379
+    hostname: proxy
+    image: stolon-proxy:demo
+    networks:
+      - stolon-network
+
+  keeper-00:
+    build:
+      args:
+        pubkey: $PUBKEY
+        privkey: $PRIVKEY
+      context: docker
+      dockerfile: Dockerfile-Keeper
+    cap_add:
+      - SYS_ADMIN
+      - SYS_PTRACE
+    container_name: keeper-00
+    hostname: keeper-00
+    image: stolon-keeper:demo
+    environment:
+      - AUTHORIZED_KEY=$AUTHORIZED_KEY
+      - ETCD_TOKEN=${ETCD_TOKEN}
+      - STKEEPER_STORE_ENDPOINTS=http://etcd-00:2379,http://etcd-01:2379,http://etcd-02:2379
+      - STKEEPER_PG_SU_PASSWORDFILE=${STOLON_KEEPER_PG_SU_PASSWORDFILE}
+      - STKEEPER_PG_REPL_PASSWORDFILE=${STOLON_KEEPER_PG_REPL_PASSWORDFILE}
+    networks:
+      - stolon-network
+    restart: "unless-stopped"
+    volumes:
+      - ./docker/secrets/pgsql:${STOLON_KEEPER_PG_SU_PASSWORDFILE}
+      - ./docker/secrets/pgsql:${STOLON_KEEPER_PG_REPL_PASSWORDFILE}
+
+  keeper-01:
+    extends:
+      service: keeper-00
+    container_name: keeper-01
+    hostname: keeper-01
+
+  keeper-02:
+    extends:
+      service: keeper-00
+    container_name: keeper-02
+    hostname: keeper-02
+
+  etcd-00:
+    build:
+      args:
+        pubkey: $PUBKEY
+        privkey: $PRIVKEY
+      context: docker
+      dockerfile: Dockerfile-ETCD
+    container_name: etcd-00
+    command:
+      - --name=etcd-00
+      - --data-dir=data.etcd
+      - --advertise-client-urls=http://etcd-00:2379
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --initial-advertise-peer-urls=http://etcd-00:2380
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-cluster=etcd-00=http://etcd-00:2380,etcd-01=http://etcd-01:2380,etcd-02=http://etcd-02:2380
+      - --initial-cluster-state=new
+      - --initial-cluster-token=${ETCD_TOKEN}
+    environment:
+      - AUTHORIZED_KEY=$AUTHORIZED_KEY
+    hostname: etcd-00
+    image: etcd:demo
+    networks:
+      - stolon-network
+    restart: "unless-stopped"
+
+  etcd-01:
+    extends:
+      service: etcd-00
+    container_name: etcd-01
+    command:
+      - --name=etcd-01
+      - --data-dir=data.etcd
+      - --advertise-client-urls=http://etcd-01:2379
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --initial-advertise-peer-urls=http://etcd-01:2380
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-cluster=etcd-00=http://etcd-00:2380,etcd-01=http://etcd-01:2380,etcd-02=http://etcd-02:2380
+      - --initial-cluster-state=new
+      - --initial-cluster-token=${ETCD_TOKEN}
+    hostname: etcd-01
+
+  etcd-02:
+    extends:
+      service: etcd-00
+    container_name: etcd-02
+    command:
+      - --name=etcd-02
+      - --data-dir=data.etcd
+      - --advertise-client-urls=http://etcd-02:2379
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --initial-advertise-peer-urls=http://etcd-02:2380
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-cluster=etcd-00=http://etcd-00:2380,etcd-01=http://etcd-01:2380,etcd-02=http://etcd-02:2380
+      - --initial-cluster-state=new
+      - --initial-cluster-token=${ETCD_TOKEN}
+    hostname: etcd-02
+
+networks:
+  stolon-network:
+    driver: bridge
